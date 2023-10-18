@@ -149,3 +149,14 @@ Facebook has adopted a Code of Conduct that we expect project participants to ad
 
 ## License
 This demo is MIT licensed.
+
+Tasks
+
+Reimplement Suspense + RSC in plain react + express + webpack without next.js
+and observe if anything is different in particular:
+* verify that server component source code is not included in client bundle
+* that suspence with server components works the same (long polling + JS and hidden <div />) (Done)
+* Verify that react client components also work and are fine without next.js (Done)
+
+* How we can use react-helmet in the same way next/redirect was used and for Title, maybe <https://react.dev/reference/react-dom/server/renderToPipeableStream#waiting-for-all-content-to-load-for-crawlers-and-static-generation> and fix onShellReady by hands
+  * helmet inside suspense and helmet outside suspense 
