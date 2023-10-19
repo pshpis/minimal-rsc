@@ -1,6 +1,6 @@
 'use client';
 import {startTransition} from 'react';
-import {useRouter} from './router';
+import {useRouter} from '../../router';
 
 export default function SidebarNoteContent({}) {
   const {navigate} = useRouter();

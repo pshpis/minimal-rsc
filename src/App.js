@@ -1,6 +1,6 @@
 import {Suspense} from 'react';
 
-import Nav from './Nav';
+import Nav from './components/client/Nav';
 import Page from './Page';
 
 export default function App({page}) {

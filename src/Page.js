@@ -1,5 +1,6 @@
 import fs from 'fs';
-import {ClientMother} from './ClientMother';
+import {ClientMother} from './components/client/ClientMother';
+import {HeaderUpdater} from './HeaderUpdater';
 
 export default async function Page({page}) {
   if (page === 'one') {
@@ -7,6 +8,7 @@ export default async function Page({page}) {
     return (
       <div>
         <h1>Page One!</h1>
+        {/*<HeaderUpdater headerName={'content-type'} headerValue={'text/html'} />*/}
         {markdown}
       </div>
     );
@@ -16,6 +18,7 @@ export default async function Page({page}) {
     return (
       <div>
         <h1>Page Two!</h1>
+        <HeaderUpdater headerName={'content-type'} headerValue={'text/html'} />
         {markdown}
       </div>
     );

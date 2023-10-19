@@ -56,9 +56,32 @@ async function renderReactTree(res, props) {
         'utf8'
     );
     const moduleMap = JSON.parse(manifest);
+
     const {pipe} = renderToPipeableStream(
-        React.createElement(ReactApp, {page: props}),
-        moduleMap
+        React.createElement(ReactApp, {page: props}), moduleMap
+        // {
+        //     onAllReady() {
+        //         console.log('allReady');
+        //         const headers = JSON.parse(readFileSync(
+        //             path.resolve(__dirname, '../server/needHeaders.json'),
+        //             'utf8'
+        //         ));
+        //         for (const key in headers) {
+        //             res.setHeader(key, headers[key]);
+        //         }
+        //     },
+        //     // onShellReady() {
+        //     //     console.log('shellReady');
+        //     //     const headers = JSON.parse(readFileSync(
+        //     //         path.resolve(__dirname, '../server/needHeaders.json'),
+        //     //         'utf8'
+        //     //     ));
+        //     // //     for (const key in headers) {
+        //     // //         res.setHeader(key, headers[key]);
+        //     // //     }
+        //     // // },
+        //     ...moduleMap
+        // }
     );
     pipe(res);
 }
