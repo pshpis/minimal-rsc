@@ -1,18 +1,20 @@
 # React Server Components Demo
 
-* [What is this?](#what-is-this)
-* [When will I be able to use this?](#when-will-i-be-able-to-use-this)
-* [Should I use this demo for benchmarks?](#should-i-use-this-demo-for-benchmarks)
-* [Setup](#setup)
-* [DB Setup](#db-setup)
-  + [Step 1. Create the Database](#step-1-create-the-database)
-  + [Step 2. Connect to the Database](#step-2-connect-to-the-database)
-  + [Step 3. Run the seed script](#step-3-run-the-seed-script)
-* [Notes about this app](#notes-about-this-app)
-  + [Interesting things to try](#interesting-things-to-try)
-* [Built by (A-Z)](#built-by-a-z)
-* [Code of Conduct](#code-of-conduct)
-* [License](#license)
+- [React Server Components Demo](#react-server-components-demo)
+  - [What is this?](#what-is-this)
+  - [When will I be able to use this?](#when-will-i-be-able-to-use-this)
+  - [Should I use this demo for benchmarks?](#should-i-use-this-demo-for-benchmarks)
+  - [Setup](#setup)
+  - [DB Setup](#db-setup)
+    - [Step 1. Create the Database](#step-1-create-the-database)
+    - [Step 2. Connect to the Database](#step-2-connect-to-the-database)
+    - [Step 3. Run the seed script](#step-3-run-the-seed-script)
+  - [Notes about this app](#notes-about-this-app)
+    - [Interesting things to try](#interesting-things-to-try)
+  - [Built by (A-Z)](#built-by-a-z)
+  - [Code of Conduct](#code-of-conduct)
+  - [License](#license)
+  - [Helmet](#helmet)
 
 ## What is this?
 
@@ -159,4 +161,60 @@ and observe if anything is different in particular:
 * Verify that react client components also work and are fine without next.js (Done)
 
 * How we can use react-helmet in the same way next/redirect was used and for Title, maybe <https://react.dev/reference/react-dom/server/renderToPipeableStream#waiting-for-all-content-to-load-for-crawlers-and-static-generation> and fix onShellReady by hands
-  * helmet inside suspense and helmet outside suspense 
+  * helmet inside suspense and helmet outside suspense
+
+=============
+
+## Helmet
+
+Craft customHeadManifest.json by hand by route
+const customHeadManifest.json
+
+let counter = 0
+window.customHeadCallBack = ()=>{
+  counter ++;
+}
+onShellReady() {
+  if we already have CustomHead data, then patch <head/>
+  if do not have CustomHead data, then look up if we need to have it
+
+}
+
+<html>
+<head>
+...
+</head>
+
+
+<App>
+  <CustomHead />
+</App>
+
+- Only server components
+- Top level instant
+```
+<App>
+  <Navbar>
+    <CustomHead props={pleaseWait:100,} />
+  </Navbar>
+</App>
+```
+
+- In suspense
+```
+<App>
+  <Suspence>
+    (5000ms)=><CustomHead />
+    (10ms)=><CustomHead />
+  </Suspence>
+</App>
+```
+
+const pipe === reactRenderToPipabe
+const myTranslator = new Stream((chunk)=>{
+  chunk.replace("title","title2"/g)
+})
+
+pipe(myTranslator)
+myTranslator(response)
+
