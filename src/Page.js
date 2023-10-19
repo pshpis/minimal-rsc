@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { ClientMother } from "./ClientMother";
+import {ClientMother} from './ClientMother';
 
 export default async function Page({page}) {
   if (page === 'one') {
@@ -23,12 +23,12 @@ export default async function Page({page}) {
   if (page === 'three') {
     const markdown = fs.readFileSync('notes/three.md', 'utf-8');
     await new Promise((res) => setTimeout(res, 2000));
-    console.log('ss11',markdown)
+    console.log('ss11', markdown);
     return (
       <div>
         <h1>Page Three! {markdown}</h1>
-        <hr/>
-        <ClientMother/>
+        <hr />
+        <ClientMother />
       </div>
     );
   }

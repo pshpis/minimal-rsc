@@ -11,7 +11,6 @@ export default function App({page}) {
         <Suspense fallback={<p>Loading...</p>}>
           <Page page={page} />
         </Suspense>
-        
       </section>
     </div>
   );
