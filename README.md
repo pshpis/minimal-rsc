@@ -190,6 +190,7 @@ tolerated.
 
 This demo is MIT licensed.
 
+===============================
 Tasks
 
 Reimplement Suspense + RSC in plain react + express + webpack without next.js
@@ -261,3 +262,13 @@ chunk.replace("title","title2"/g)
 pipe(myTranslator)
 myTranslator(response)
 
+Создать три стрима
+для генерации, трансформации и поедания инфы
+readable writable transformer 
+
+попробовать helmet
+разобраться с версиями реакта
+разобраться почему калбеки не вызываются
+исходить из того что needHeaders уже есть
+
+сделать свой transformer над респонсом, через который будет идти
