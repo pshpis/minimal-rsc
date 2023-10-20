@@ -262,13 +262,15 @@ chunk.replace("title","title2"/g)
 pipe(myTranslator)
 myTranslator(response)
 
+ДЗ:
 Создать три стрима
 для генерации, трансформации и поедания инфы
 readable writable transformer 
 
+Таски:
 попробовать helmet
 разобраться с версиями реакта
 разобраться почему калбеки не вызываются
-исходить из того что needHeaders уже есть
+исходить из того что needHeaders.json уже есть
 
-сделать свой transformer над респонсом, через который будет идти
+сделать свой transformer stream над респонсом, через который будет идти
