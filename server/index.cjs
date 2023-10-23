@@ -51,6 +51,7 @@ app.get(
 
 async function renderReactTree(res, props) {
     await waitForWebpack();
+    console.log("rendering react tree")
     const manifest = readFileSync(
         path.resolve(__dirname, '../build/react-client-manifest.json'),
         'utf8'
@@ -58,32 +59,40 @@ async function renderReactTree(res, props) {
     const moduleMap = JSON.parse(manifest);
 
     const {pipe} = renderToPipeableStream(
-        React.createElement(ReactApp, {page: props}), moduleMap
-        // {
-        //     onAllReady() {
-        //         console.log('allReady');
-        //         const headers = JSON.parse(readFileSync(
-        //             path.resolve(__dirname, '../server/needHeaders.json'),
-        //             'utf8'
-        //         ));
-        //         for (const key in headers) {
-        //             res.setHeader(key, headers[key]);
-        //         }
-        //     },
-        //     // onShellReady() {
-        //     //     console.log('shellReady');
-        //     //     const headers = JSON.parse(readFileSync(
-        //     //         path.resolve(__dirname, '../server/needHeaders.json'),
-        //     //         'utf8'
-        //     //     ));
-        //     // //     for (const key in headers) {
-        //     // //         res.setHeader(key, headers[key]);
-        //     // //     }
-        //     // // },
-        //     ...moduleMap
-        // }
+        React.createElement(ReactApp, {page: props}), moduleMap,
+        {
+            onAllReady() {
+                console.log('allReady🙂');
+                const headers = JSON.parse(readFileSync(
+                    path.resolve(__dirname, '../server/needHeaders.json'),
+                    'utf8'
+                ));
+                console.log(headers, '🙂')
+                for (const key in headers) {
+                    res.setHeader(key, headers[key]);
+                }
+            },
+            onShellReady() {
+                console.log('shellReady');
+                const headers = JSON.parse(readFileSync(
+                    path.resolve(__dirname, '../server/needHeaders.json'),
+                    'utf8'
+                ));
+                for (const key in headers) {
+                    res.setHeader(key, headers[key]);
+                }
+            },
+            onShellError(error) {
+                console.log(123, error);
+            },
+            onError(error) {
+                console.log(123, error);
+            }
+        }
     );
+    // transformers
     pipe(res);
+    console.log("react tree rendered")
 }
 
 function sendResponse(req, res, redirectToId) {
