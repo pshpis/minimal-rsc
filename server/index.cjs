@@ -58,6 +58,10 @@ async function renderReactTree(res, props) {
     );
     const moduleMap = JSON.parse(manifest);
 
+    // const listenear = () => {};
+    //
+    // myEmitter.on('event', listenear);
+
     const {pipe} = renderToPipeableStream(
         React.createElement(ReactApp, {page: props}), moduleMap,
         {
