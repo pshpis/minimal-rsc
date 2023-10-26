@@ -12,11 +12,12 @@ babelRegister({
 
 const express = require('express');
 const {readFileSync} = require('fs');
-const {renderToPipeableStream} = require('react-dom/server');
+const {renderToPipeableStream} = require('react-server-dom-webpack/server');
 const path = require('path');
 const React = require('react');
 const myEmitter = require("./customHeaderCallback");
 const ReactApp = require('../src/App').default;
+const {Transform, Writable} = require('node:stream');
 
 const PORT = process.env.PORT || 4000;
 const app = express();
@@ -50,6 +51,76 @@ app.get(
     })
 );
 
+class ResponseTransformStream extends Transform {
+    constructor(opt) {
+        super(opt);
+
+        this._max = 1000;
+        this._index = 0;
+
+        // this.listener = () => {
+        //     console.log(`Listener activated`);
+        //     return opt.response;
+        // };
+        // myEmitter.addListener("headerUpdater", this.listener);
+    }
+
+    _read() {
+        this._index += 1;
+
+        if (this._index > this._max) {
+            this.push(null);
+        } else {
+            const buf = Buffer.from(`${this._index}`, 'utf8');
+
+            this.push(buf);
+        }
+    }
+
+    // on = () => {
+    //     myEmitter.on('drain', this.listener);
+    // }
+
+    _write(chunk, encoding, callback) {
+        console.log(chunk.toString());
+        console.log(callback)
+        try {
+            callback(null, chunk);
+        } catch (err) {
+            callback(err);
+        }
+        // callback();
+    }
+
+    // destroy(error) {
+    //     console.log(error);
+    // }
+
+    end() {
+        console.log('end');
+        return this;
+    }
+
+    // pipe(destination) {
+    //     console.log(destination);
+    //     return renderToPipeableStream(destination);
+    // }
+
+    // _transform(chunk, encoding, callback) {
+    //     try {
+    //         const resultString = `*${chunk.toString('utf8')}*`;
+    //
+    //         callback(null, resultString);
+    //     } catch (err) {
+    //         callback(err);
+    //     }
+    // }
+}
+
+class ResponseWriteable extends Writable {
+
+}
+
 async function renderReactTree(res, props) {
     await waitForWebpack();
     console.log("rendering react tree")
@@ -59,41 +130,20 @@ async function renderReactTree(res, props) {
     );
     const moduleMap = JSON.parse(manifest);
 
-    const listener = () => {
-        console.log(`React Notes listening`)
-    };
-    myEmitter.addListener("headerUpdater", listener);
-    myEmitter.on('headerUpdater', listener);
+    // const listener = (res) => {
+    //     console.log(`Listener activated`);
+    //     return res;
+    // };
+    //
+    // myEmitter.addListener("headerUpdater", listener);
 
     const stream = renderToPipeableStream(
-        React.createElement(ReactApp, {page: props}),
-        {
-            onAllReady() {
-                console.log('allReady🙂');
-                const headers = JSON.parse(readFileSync(
-                    path.resolve(__dirname, '../server/needHeaders.json'),
-                    'utf8'
-                ));
-                console.log(headers, '🙂')
-                for (const key in headers) {
-                    res.setHeader(key, headers[key]);
-                }
-            },
-            onShellReady() {
-                console.log('shellReady');
-                const headers = JSON.parse(readFileSync(
-                    path.resolve(__dirname, '../server/needHeaders.json'),
-                    'utf8'
-                ));
-                for (const key in headers) {
-                    res.setHeader(key, headers[key]);
-                }
-            },
-        }
-    );
-    // transformers
+        React.createElement(ReactApp, {page: props}), moduleMap);
     // it will be easy to make not mock object and make transform stream on response with accumulator
-    stream.pipe(res);
+
+    const responseTransform = new ResponseTransformStream({response: res});
+    // const responseTransform = new ResponseWriteable();
+    stream.pipe(responseTransform).pipe(res);
     console.log("react tree rendered")
 }
 

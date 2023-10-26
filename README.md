@@ -298,3 +298,10 @@ readable writable transformer
 **Ответы:**
 1. Создан Emitter для прослушивания изменения headers из HeaderUpdater внутри renderReactTree. Для корректной работы 
    необходимо запустить сервер через терминал: $ node --conditions=react-server server/index.cjs
+
+![img.png](img.png)
+
+2. Был проверен вариант с использование TransformStream. При его использовании возникает 
+   ошибка из-за отсутствия метода .on(), который вызывается внутри renderToPipeableStream.pipe().
+3. Создан класс ResponseTransformStream наследованный от Transform, посредством которго выводятся
+   чанки respons'а.
