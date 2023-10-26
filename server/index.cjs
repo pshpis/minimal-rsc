@@ -12,7 +12,7 @@ babelRegister({
 
 const express = require('express');
 const {readFileSync} = require('fs');
-const {renderToPipeableStream} = require('react-server-dom-webpack/server');
+const {renderToPipeableStream} = require('react-dom/server');
 const path = require('path');
 const React = require('react');
 const myEmitter = require("./customHeaderCallback");
@@ -65,8 +65,8 @@ async function renderReactTree(res, props) {
     myEmitter.addListener("headerUpdater", listener);
     myEmitter.on('headerUpdater', listener);
 
-    const {pipe: stream} = renderToPipeableStream(
-        React.createElement(ReactApp, {page: props}), moduleMap,
+    const stream = renderToPipeableStream(
+        React.createElement(ReactApp, {page: props}),
         {
             onAllReady() {
                 console.log('allReady🙂');
@@ -92,7 +92,8 @@ async function renderReactTree(res, props) {
         }
     );
     // transformers
-    stream(res);
+    // it will be easy to make not mock object and make transform stream on response with accumulator
+    stream.pipe(res);
     console.log("react tree rendered")
 }
 
