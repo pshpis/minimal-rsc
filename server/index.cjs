@@ -52,8 +52,8 @@ app.get(
 );
 
 class ResponseTransformStream extends Transform {
-    constructor(opt) {
-        super(opt);
+    constructor() {
+        super();
 
         this._max = 1000;
         this._index = 0;
@@ -65,60 +65,60 @@ class ResponseTransformStream extends Transform {
         // myEmitter.addListener("headerUpdater", this.listener);
     }
 
-    _read() {
-        this._index += 1;
-
-        if (this._index > this._max) {
-            this.push(null);
-        } else {
-            const buf = Buffer.from(`${this._index}`, 'utf8');
-
-            this.push(buf);
-        }
-    }
+    // _read() {
+    //     this._index += 1;
+    //
+    //     if (this._index > this._max) {
+    //         this.push(null);
+    //     } else {
+    //         const buf = Buffer.from(`${this._index}`, 'utf8');
+    //
+    //         this.push(buf);
+    //     }
+    // }
 
     // on = () => {
     //     myEmitter.on('drain', this.listener);
     // }
 
-    _write(chunk, encoding, callback) {
-        console.log(chunk.toString());
-        console.log(callback)
-        try {
-            callback(null, chunk);
-        } catch (err) {
-            callback(err);
-        }
-        // callback();
-    }
+    // _write(chunk, encoding, callback) {
+    //     console.log(chunk.toString());
+    //     console.log(callback)
+    //     try {
+    //         callback(null, chunk);
+    //     } catch (err) {
+    //         callback(err);
+    //     }
+    //     // callback();
+    // }
 
     // destroy(error) {
     //     console.log(error);
     // }
 
-    end() {
-        console.log('end');
-        return this;
-    }
+    // end() {
+    //     console.log('end');
+    //     return this;
+    // }
 
     // pipe(destination) {
     //     console.log(destination);
     //     return renderToPipeableStream(destination);
     // }
 
-    // _transform(chunk, encoding, callback) {
-    //     try {
-    //         const resultString = `*${chunk.toString('utf8')}*`;
-    //
-    //         callback(null, resultString);
-    //     } catch (err) {
-    //         callback(err);
-    //     }
-    // }
-}
+    _transform(chunk, encoding, callback) {
+        try {
+            let resultString = `${chunk.toString('utf8')}`;
+            console.log(chunk);
+            console.log(resultString);
+            let ind = resultString.lastIndexOf('Loading...');
+            resultString = resultString.replace('Loading...', 'Loaaaaading)))) We win a game, but lose a war')
 
-class ResponseWriteable extends Writable {
-
+            callback(null, resultString);
+        } catch (err) {
+            callback(err);
+        }
+    }
 }
 
 async function renderReactTree(res, props) {
@@ -141,7 +141,7 @@ async function renderReactTree(res, props) {
         React.createElement(ReactApp, {page: props}), moduleMap);
     // it will be easy to make not mock object and make transform stream on response with accumulator
 
-    const responseTransform = new ResponseTransformStream({response: res});
+    const responseTransform = new ResponseTransformStream();
     // const responseTransform = new ResponseWriteable();
     stream.pipe(responseTransform).pipe(res);
     console.log("react tree rendered")
