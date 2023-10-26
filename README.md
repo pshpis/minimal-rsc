@@ -294,3 +294,7 @@ readable writable transformer
 3. Отправлять хедеры не по чуть-чуть, а сохранять и отправлять сразу все по команде(?)
 4. Тоже самое с res.write и res.send(res.send = res.write + res.end + res.setHeader(200) (возможно))
 5. общение между сервер компонентами и server/index.cjs через глобальные кал
+
+**Ответы:**
+1. Создан Emitter для прослушивания изменения headers из HeaderUpdater внутри renderReactTree. Для корректной работы 
+   необходимо запустить сервер через терминал: $ node --conditions=react-server server/index.cjs
