@@ -15,6 +15,7 @@ const {readFileSync} = require('fs');
 const {renderToPipeableStream} = require('react-server-dom-webpack/server');
 const path = require('path');
 const React = require('react');
+const myEmitter = require("./customHeaderCallback");
 const ReactApp = require('../src/App').default;
 
 const PORT = process.env.PORT || 4000;
@@ -58,11 +59,13 @@ async function renderReactTree(res, props) {
     );
     const moduleMap = JSON.parse(manifest);
 
-    // const listenear = () => {};
-    //
-    // myEmitter.on('event', listenear);
+    const listener = () => {
+        console.log(`React Notes listening`)
+    };
+    myEmitter.addListener("headerUpdater", listener);
+    myEmitter.on('headerUpdater', listener);
 
-    const {pipe} = renderToPipeableStream(
+    const {pipe: stream} = renderToPipeableStream(
         React.createElement(ReactApp, {page: props}), moduleMap,
         {
             onAllReady() {
@@ -86,16 +89,10 @@ async function renderReactTree(res, props) {
                     res.setHeader(key, headers[key]);
                 }
             },
-            onShellError(error) {
-                console.log(123, error);
-            },
-            onError(error) {
-                console.log(123, error);
-            }
         }
     );
     // transformers
-    pipe(res);
+    stream(res);
     console.log("react tree rendered")
 }
 

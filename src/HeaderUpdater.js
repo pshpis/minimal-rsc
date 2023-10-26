@@ -1,5 +1,5 @@
 import fs from 'fs';
-import myEmiter from '../server/customHeaderCallback.js';
+import myEmitter from '../server/customHeaderCallback.js';
 
 export function HeaderUpdater({headerName, headerValue}) {
   const headers = JSON.parse(
@@ -7,7 +7,7 @@ export function HeaderUpdater({headerName, headerValue}) {
   );
   headers[headerName] = headerValue;
   fs.writeFileSync('server/needHeaders.json', JSON.stringify(headers));
-  console.log(headers);
-  //myEmiter.emit('headerUpdater', props);
+  console.log("HeaderUpdater: ", headers);
+  myEmitter.emit('headerUpdater');
   return <></>;
 }
