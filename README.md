@@ -1,20 +1,21 @@
 # React Server Components Demo
 
 - [React Server Components Demo](#react-server-components-demo)
-    - [What is this?](#what-is-this)
-    - [When will I be able to use this?](#when-will-i-be-able-to-use-this)
-    - [Should I use this demo for benchmarks?](#should-i-use-this-demo-for-benchmarks)
-    - [Setup](#setup)
-    - [DB Setup](#db-setup)
-        - [Step 1. Create the Database](#step-1-create-the-database)
-        - [Step 2. Connect to the Database](#step-2-connect-to-the-database)
-        - [Step 3. Run the seed script](#step-3-run-the-seed-script)
-    - [Notes about this app](#notes-about-this-app)
-        - [Interesting things to try](#interesting-things-to-try)
-    - [Built by (A-Z)](#built-by-a-z)
-    - [Code of Conduct](#code-of-conduct)
-    - [License](#license)
-    - [Helmet](#helmet)
+  - [What is this?](#what-is-this)
+  - [When will I be able to use this?](#when-will-i-be-able-to-use-this)
+  - [Should I use this demo for benchmarks?](#should-i-use-this-demo-for-benchmarks)
+  - [Setup](#setup)
+  - [DB Setup](#db-setup)
+    - [Step 1. Create the Database](#step-1-create-the-database)
+    - [Step 2. Connect to the Database](#step-2-connect-to-the-database)
+    - [Step 3. Run the seed script](#step-3-run-the-seed-script)
+  - [Notes about this app](#notes-about-this-app)
+    - [Interesting things to try](#interesting-things-to-try)
+  - [Built by (A-Z)](#built-by-a-z)
+  - [Code of Conduct](#code-of-conduct)
+  - [License](#license)
+  - [Helmet](#helmet)
+  - [User with mobile:](#user-with-mobile)
 
 ## What is this?
 
@@ -306,12 +307,6 @@ readable writable transformer
    чанки respons'а.
 4. Получилось поменять внутрености лоадера внутри трансформ стрима. Но без понятия как менять тайтлы или ставить хедеры
 
-Новые таски 27.10.2023:
-1. Переехать на renderToPipeableStream без вебпака
-2. Научиться не бегать на /rsc, а выдавать данные по / но кусками
-3. Сделать нормальные страницы на разных урлах
-4. Скорее всего пункт 2 делается через мок на респонсом
-
 Результат от 30.07.2023
 1. Сделал компонент тайтл как в хелмете
 2. Появились следующие идеи:
@@ -320,4 +315,25 @@ readable writable transformer
     - держать в хелмете json с учетом мультистраничности
     - собирать файл MegaPage.js в build.js перед запуском вебпака
     - изменять хрев в браузере на клиенте при переходе между ссылками
-3. 
+
+Новые таски 30.10.2023:
+1. Переехать на renderToPipeableStream без вебпака
+2. Научиться не бегать на /rsc, а выдавать данные по / но кусками
+3. Сделать нормальные страницы на разных урлах /page1 /page2
+
+---------
+Old school: HTML-ssr
+  - problem: takes too long to render all
+User with mobile:
+ - 
+For google bot: HTML-stream: /contacts/ 200, <title>Contacts</title>
+  - problem can take long to load, ships parts in hidden div which Google bot may not like
+  - good one stream not needed JS above the fold
+  * replace title
+  * render html stream
+  * JSON-stream => <html>-stream
+            * <div hidden></div>
+            * <script></script>
+For client JS: json-stream: /about/ /rsc/ <script>window.title.title=About</script>
+  JSON-stream: 
+
