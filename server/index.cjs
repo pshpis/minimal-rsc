@@ -12,13 +12,14 @@ babelRegister({
 
 const express = require('express');
 const {readFileSync} = require('fs');
+const {renderToNodeStream, renderToStaticNodeStream} = require('react-dom/server');
 const {renderToPipeableStream} = require('react-server-dom-webpack/server');
 const path = require('path');
 const React = require('react');
 const ReactApp = require('../src/App').default;
-const responseTransformStream = require('./responseTransformStream')
+const responseTransformStream = require('./utils/responseTransformStream')
 const fs = require("fs");
-const {getHtmlWithUpdatedTitle} = require("./updateHtml");
+const {getHtmlWithUpdatedTitle} = require("./utils/updateHtml");
 
 const PORT = process.env.PORT || 4000;
 const app = express();
@@ -39,12 +40,11 @@ function handleErrors(fn) {
     };
 }
 
-app.get(
-    '/',
-    handleErrors(async function (_req, res) {
+function getPageResponseHandler(pageName) {
+    return handleErrors(async function (_req, res) {
         await waitForWebpack();
         let html = readFileSync(
-            path.resolve(__dirname, '../build/index.html'),
+            path.resolve(__dirname, pageName ? `../build/${pageName}.html`: '../build/index.html'),
             'utf8'
         );
 
@@ -64,6 +64,11 @@ app.get(
 
         res.send(html);
     })
+}
+
+app.get(
+    '/',
+    getPageResponseHandler()
 );
 
 async function renderReactTree(res, props) {
@@ -74,8 +79,11 @@ async function renderReactTree(res, props) {
         'utf8'
     );
     const moduleMap = JSON.parse(manifest);
+    moduleMap['onShellReady'] = function (){
+        console.log('Shell is ready');
+    }
 
-    const stream = renderToPipeableStream(React.createElement(ReactApp, {page: props}), moduleMap);
+    const stream = renderToPipeableStream(React.createElement(ReactApp, {page: props}));
 
     stream.pipe(responseTransformStream).pipe(res);
     console.log("react tree rendered")
