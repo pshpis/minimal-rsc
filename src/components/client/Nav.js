@@ -10,7 +10,7 @@ export default function SidebarNoteContent({}) {
       <div
         onClick={() => {
           startTransition(() => {
-            navigate('one');
+            navigate('Page1');
           });
         }}>
         Page One
@@ -18,7 +18,7 @@ export default function SidebarNoteContent({}) {
       <div
         onClick={() => {
           startTransition(() => {
-            navigate('two');
+            navigate('Page2');
           });
         }}>
         Page Two
@@ -26,7 +26,7 @@ export default function SidebarNoteContent({}) {
       <div
         onClick={() => {
           startTransition(() => {
-            navigate('three');
+            navigate('Page3');
           });
         }}>
         Page with <code>Suspense</code>

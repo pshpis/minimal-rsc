@@ -15,9 +15,10 @@ const {readFileSync} = require('fs');
 const {renderToPipeableStream} = require('react-server-dom-webpack/server');
 const path = require('path');
 const React = require('react');
-const myEmitter = require("./customHeaderCallback");
 const ReactApp = require('../src/App').default;
-const {Transform, Writable} = require('node:stream');
+const responseTransformStream = require('./responseTransformStream')
+const fs = require("fs");
+const {getHtmlWithUpdatedTitle} = require("./updateHtml");
 
 const PORT = process.env.PORT || 4000;
 const app = express();
@@ -42,84 +43,28 @@ app.get(
     '/',
     handleErrors(async function (_req, res) {
         await waitForWebpack();
-        const html = readFileSync(
+        let html = readFileSync(
             path.resolve(__dirname, '../build/index.html'),
             'utf8'
         );
 
+        let helmetData = null;
+        try {
+            helmetData = JSON.parse(
+                fs.readFileSync('server/myBuildFiles/myHelmet.json', 'utf-8')
+            );
+        }
+        catch (err) {
+            console.log("Error on getting helmet data: ", err.message);
+        }
+
+        if (helmetData){
+            html = getHtmlWithUpdatedTitle(html, helmetData.title);
+        }
+
         res.send(html);
     })
 );
-
-class ResponseTransformStream extends Transform {
-    constructor() {
-        super();
-
-        this._max = 1000;
-        this._index = 0;
-
-        // this.listener = () => {
-        //     console.log(`Listener activated`);
-        //     return opt.response;
-        // };
-        // myEmitter.addListener("headerUpdater", this.listener);
-    }
-
-    // _read() {
-    //     this._index += 1;
-    //
-    //     if (this._index > this._max) {
-    //         this.push(null);
-    //     } else {
-    //         const buf = Buffer.from(`${this._index}`, 'utf8');
-    //
-    //         this.push(buf);
-    //     }
-    // }
-
-    // on = () => {
-    //     myEmitter.on('drain', this.listener);
-    // }
-
-    // _write(chunk, encoding, callback) {
-    //     console.log(chunk.toString());
-    //     console.log(callback)
-    //     try {
-    //         callback(null, chunk);
-    //     } catch (err) {
-    //         callback(err);
-    //     }
-    //     // callback();
-    // }
-
-    // destroy(error) {
-    //     console.log(error);
-    // }
-
-    // end() {
-    //     console.log('end');
-    //     return this;
-    // }
-
-    // pipe(destination) {
-    //     console.log(destination);
-    //     return renderToPipeableStream(destination);
-    // }
-
-    _transform(chunk, encoding, callback) {
-        try {
-            let resultString = `${chunk.toString('utf8')}`;
-            console.log(chunk);
-            console.log(resultString);
-            let ind = resultString.lastIndexOf('Loading...');
-            resultString = resultString.replace('Loading...', 'Loaaaaading)))) We win a game, but lose a war')
-
-            callback(null, resultString);
-        } catch (err) {
-            callback(err);
-        }
-    }
-}
 
 async function renderReactTree(res, props) {
     await waitForWebpack();
@@ -130,20 +75,9 @@ async function renderReactTree(res, props) {
     );
     const moduleMap = JSON.parse(manifest);
 
-    // const listener = (res) => {
-    //     console.log(`Listener activated`);
-    //     return res;
-    // };
-    //
-    // myEmitter.addListener("headerUpdater", listener);
+    const stream = renderToPipeableStream(React.createElement(ReactApp, {page: props}), moduleMap);
 
-    const stream = renderToPipeableStream(
-        React.createElement(ReactApp, {page: props}), moduleMap);
-    // it will be easy to make not mock object and make transform stream on response with accumulator
-
-    const responseTransform = new ResponseTransformStream();
-    // const responseTransform = new ResponseWriteable();
-    stream.pipe(responseTransform).pipe(res);
+    stream.pipe(responseTransformStream).pipe(res);
     console.log("react tree rendered")
 }
 

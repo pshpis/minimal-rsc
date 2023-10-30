@@ -11,7 +11,7 @@ const initialCache = new Map();
 
 export function Router() {
   const [cache, setCache] = useState(initialCache);
-  const [location, setLocation] = useState('one');
+  const [location, setLocation] = useState('Page1');
 
   const locationKey = JSON.stringify(location);
   let content = cache.get(locationKey);

@@ -6,7 +6,6 @@ import {ClientSlow} from './ClientSlow';
 
 export const ClientMother = () => {
   const [client] = useState('I am client, mother');
-  console.log('cc11');
   return (
     <div>
       {client} <br />

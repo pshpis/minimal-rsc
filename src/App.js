@@ -1,7 +1,7 @@
 import {Suspense} from 'react';
 
 import Nav from './components/client/Nav';
-import Page from './Page';
+import MegaPage from './MegaPage';
 
 export default function App({page}) {
   return (
@@ -9,7 +9,7 @@ export default function App({page}) {
       <Nav />
       <section key={page} className="col note-viewer">
         <Suspense fallback={<p>Loading...</p>}>
-          <Page page={page} />
+          <MegaPage page={page} />
         </Suspense>
       </section>
     </div>
