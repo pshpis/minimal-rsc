@@ -1,22 +1,173 @@
+/**
+ * @license React
+ * react-server-dom-webpack-client.edge.development.js
+ *
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+'use strict';
+
 const React = require('react');
 
+function createStringDecoder() {
+  return new TextDecoder();
+}
+
+const decoderOptions = {
+  stream: true,
+};
+
+function readPartialStringChunk(decoder, buffer) {
+  return decoder.decode(buffer, decoderOptions);
+}
+
+function readFinalStringChunk(decoder, buffer) {
+  return decoder.decode(buffer);
+}
+
+function parseModel(response, json) {
+  return JSON.parse(json, response._fromJSON);
+}
+
+function resolveClientReference(bundlerConfig, metadata) {
+  if (bundlerConfig) {
+    const resolvedModuleData = bundlerConfig[metadata.id][metadata.name];
+
+    if (metadata.async) {
+      return {
+        id: resolvedModuleData.id,
+        chunks: resolvedModuleData.chunks,
+        name: resolvedModuleData.name,
+        async: true,
+      };
+    } else {
+      return resolvedModuleData;
+    }
+  }
+
+  return metadata;
+}
+
+// If they're still pending they're a thenable. This map also exists
+// replicate it in user space. null means that it has already loaded.
+
+const chunkCache = new Map();
+const asyncModuleCache = new Map();
+
+function ignoreReject() {
+  // We rely on rejected promises to be handled by another listener.
+} // Start preloading the modules since we might need them soon.
+// This function doesn't suspend.
+
+function preloadModule(metadata) {
+  const chunks = metadata.chunks;
+  const promises = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkId = chunks[i];
+    const entry = chunkCache.get(chunkId);
+
+    if (entry === undefined) {
+      const thenable = __webpack_chunk_load__(chunkId);
+
+      promises.push(thenable); // $FlowFixMe[method-unbinding]
+
+      const resolve = chunkCache.set.bind(chunkCache, chunkId, null);
+      thenable.then(resolve, ignoreReject);
+      chunkCache.set(chunkId, thenable);
+    } else if (entry !== null) {
+      promises.push(entry);
+    }
+  }
+
+  if (metadata.async) {
+    const existingPromise = asyncModuleCache.get(metadata.id);
+
+    if (existingPromise) {
+      if (existingPromise.status === 'fulfilled') {
+        return null;
+      }
+
+      return existingPromise;
+    } else {
+      const modulePromise = Promise.all(promises).then(function() {
+        return __webpack_require__(metadata.id);
+      });
+      modulePromise.then(
+        function(value) {
+          const fulfilledThenable = modulePromise;
+          fulfilledThenable.status = 'fulfilled';
+          fulfilledThenable.value = value;
+        },
+        function(reason) {
+          const rejectedThenable = modulePromise;
+          rejectedThenable.status = 'rejected';
+          rejectedThenable.reason = reason;
+        }
+      );
+      asyncModuleCache.set(metadata.id, modulePromise);
+      return modulePromise;
+    }
+  } else if (promises.length > 0) {
+    return Promise.all(promises);
+  } else {
+    return null;
+  }
+} // Actually require the module or suspend if it's not yet ready.
+// Increase priority if necessary.
+
+function requireModule(metadata) {
+  let moduleExports = null;
+
+  if (metadata.async) {
+    // We assume that preloadModule has been called before, which
+    // should have added something to the module cache.
+    const promise = asyncModuleCache.get(metadata.id);
+
+    if (promise.status === 'fulfilled') {
+      moduleExports = promise.value;
+    } else {
+      throw promise.reason;
+    }
+  } else {
+    moduleExports = __webpack_require__(metadata.id);
+  }
+
+  if (metadata.name === '*') {
+    // This is a placeholder value that represents that the caller imported this
+    // as a CommonJS module as is.
+    return moduleExports;
+  }
+
+  if (metadata.name === '') {
+    // This is a placeholder value that represents that the caller accessed the
+    // default property of this if it was an ESM interop module.
+    return moduleExports.__esModule ? moduleExports.default : moduleExports;
+  }
+
+  return moduleExports[metadata.name];
+}
+
+const knownServerReferences = new WeakMap();
+
+// ATTENTION
+// When adding new symbols to this file,
+// Please consider also adding to 'react-devtools-shared/src/backend/ReactSymbols'
+// The Symbol used to tag the ReactElement-like types.
 const REACT_ELEMENT_TYPE = Symbol.for('react.element');
 const REACT_LAZY_TYPE = Symbol.for('react.lazy');
 const REACT_SERVER_CONTEXT_DEFAULT_VALUE_NOT_LOADED = Symbol.for(
   'react.default_value'
 );
 
-const PENDING = 'pending';
-const BLOCKED = 'blocked';
-const RESOLVED_MODEL = 'resolved_model';
-const RESOLVED_MODULE = 'resolved_module';
-const INITIALIZED = 'fulfilled';
-const ERRORED = 'rejected'; // $FlowFixMe[missing-this-annot]
-
 const ReactSharedInternals =
   React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
 
 const ContextRegistry = ReactSharedInternals.ContextRegistry;
+
 function getOrCreateServerContext(globalName) {
   if (!ContextRegistry[globalName]) {
     ContextRegistry[globalName] = React.createServerContext(
@@ -28,77 +179,19 @@ function getOrCreateServerContext(globalName) {
   return ContextRegistry[globalName];
 }
 
-const asyncModuleCache = new Map();
-const chunkCache = new Map();
-const knownServerReferences = new WeakMap();
-
-function noServerCall() {
-  throw new Error(
-    'Server Functions cannot be called during initial render. ' +
-      'This would create a fetch waterfall. Try to use a Server Component ' +
-      'to pass data to Client Components instead.'
-  );
-}
-
-function missingCall() {
-  throw new Error(
-    'Trying to call a function from "use server" but the callServer option ' +
-      'was not implemented in your router runtime.'
-  );
-}
-
-function close(response) {
-  // In case there are any remaining unresolved chunks, they won't
-  // be resolved now. So we need to issue an error to those.
-  // Ideally we should be able to early bail out if we kept a
-  // ref count of pending chunks.
-  reportGlobalError(response, new Error('Connection closed.'));
-}
+const PENDING = 'pending';
+const BLOCKED = 'blocked';
+const RESOLVED_MODEL = 'resolved_model';
+const RESOLVED_MODULE = 'resolved_module';
+const INITIALIZED = 'fulfilled';
+const ERRORED = 'rejected'; // $FlowFixMe[missing-this-annot]
 
 function Chunk(status, value, reason, response) {
   this.status = status;
   this.value = value;
   this.reason = reason;
   this._response = response;
-}
-
-let initializingChunk = null;
-let initializingChunkBlockedModel = null;
-
-function initializeModelChunk(chunk) {
-  const prevChunk = initializingChunk;
-  const prevBlocked = initializingChunkBlockedModel;
-  initializingChunk = chunk;
-  initializingChunkBlockedModel = null;
-
-  try {
-    const value = JSON.parse(chunk.value, chunk._response._fromJSON);
-
-    if (
-      initializingChunkBlockedModel !== null &&
-      initializingChunkBlockedModel.deps > 0
-    ) {
-      initializingChunkBlockedModel.value = value; // We discovered new dependencies on modules that are not yet resolved.
-      // We have to go the BLOCKED state until they're resolved.
-
-      const blockedChunk = chunk;
-      blockedChunk.status = BLOCKED;
-      blockedChunk.value = null;
-      blockedChunk.reason = null;
-    } else {
-      const initializedChunk = chunk;
-      initializedChunk.status = INITIALIZED;
-      initializedChunk.value = value;
-    }
-  } catch (error) {
-    const erroredChunk = chunk;
-    erroredChunk.status = ERRORED;
-    erroredChunk.reason = error;
-  } finally {
-    initializingChunk = prevChunk;
-    initializingChunkBlockedModel = prevBlocked;
-  }
-}
+} // We subclass Promise.prototype so that we get other methods like .catch
 
 Chunk.prototype = Object.create(Promise.prototype); // TODO: This doesn't return a new Promise chain unlike the real .then
 
@@ -146,221 +239,6 @@ Chunk.prototype.then = function(resolve, reject) {
       break;
   }
 };
-function wakeChunk(listeners, value) {
-  for (let i = 0; i < listeners.length; i++) {
-    const listener = listeners[i];
-    listener(value);
-  }
-}
-function triggerErrorOnChunk(chunk, error) {
-  if (chunk.status !== PENDING && chunk.status !== BLOCKED) {
-    // We already resolved. We didn't expect to see this.
-    return;
-  }
-
-  const listeners = chunk.reason;
-  const erroredChunk = chunk;
-  erroredChunk.status = ERRORED;
-  erroredChunk.reason = error;
-
-  if (listeners !== null) {
-    wakeChunk(listeners, error);
-  }
-}
-
-function reportGlobalError(response, error) {
-  response._chunks.forEach(function(chunk) {
-    // If this chunk was already resolved or errored, it won't
-    // trigger an error but if it wasn't then we need to
-    // because we won't be getting any new data to resolve it.
-    if (chunk.status === PENDING) {
-      triggerErrorOnChunk(chunk, error);
-    }
-  });
-}
-
-const decoderOptions = {
-  stream: true,
-};
-
-function readFinalStringChunk(decoder, buffer) {
-  return decoder.decode(buffer);
-}
-function readPartialStringChunk(decoder, buffer) {
-  return decoder.decode(buffer, decoderOptions);
-}
-
-function processBinaryChunk(response, chunk) {
-  const stringDecoder = response._stringDecoder;
-  let linebreak = chunk.indexOf(10); // newline
-
-  while (linebreak > -1) {
-    const fullrow =
-      response._partialRow +
-      readFinalStringChunk(stringDecoder, chunk.subarray(0, linebreak));
-    processFullRow(response, fullrow);
-    response._partialRow = '';
-    chunk = chunk.subarray(linebreak + 1);
-    linebreak = chunk.indexOf(10); // newline
-  }
-
-  response._partialRow += readPartialStringChunk(stringDecoder, chunk);
-}
-
-function resolveErrorDev(response, id, digest, message, stack) {
-  var error = new Error(
-    message ||
-      'An error occurred in the Server Components render but no message was provided'
-  );
-  error.stack = stack;
-  error.digest = digest;
-  var errorWithDigest = error;
-  var chunks = response._chunks;
-  var chunk = chunks.get(id);
-
-  if (!chunk) {
-    chunks.set(id, createErrorChunk(response, errorWithDigest));
-  } else {
-    triggerErrorOnChunk(chunk, errorWithDigest);
-  }
-}
-
-function processFullRow(response, row) {
-  if (row === '') {
-    return;
-  }
-
-  var colon = row.indexOf(':', 0);
-  var id = parseInt(row.substring(0, colon), 16);
-  var tag = row[colon + 1]; // When tags that are not text are added, check them here before
-  // parsing the row as text.
-  // switch (tag) {
-  // }
-
-  switch (tag) {
-    case 'I': {
-      resolveModule(response, id, row.substring(colon + 2));
-      return;
-    }
-
-    case 'E': {
-      var errorInfo = JSON.parse(row.substring(colon + 2));
-
-      {
-        resolveErrorDev(
-          response,
-          id,
-          errorInfo.digest,
-          errorInfo.message,
-          errorInfo.stack
-        );
-      }
-
-      return;
-    }
-
-    default: {
-      // We assume anything else is JSON.
-      resolveModel(response, id, row.substring(colon + 1));
-      return;
-    }
-  }
-}
-
-function startReadingFromStream(response, stream) {
-  const reader = stream.getReader();
-
-  function progress(_ref) {
-    const done = _ref.done,
-      value = _ref.value;
-
-    if (done) {
-      close(response);
-      return;
-    }
-
-    processBinaryChunk(response, value);
-    return reader
-      .read()
-      .then(progress)
-      .catch(error);
-  }
-
-  function error(e) {
-    reportGlobalError(response, e);
-  }
-
-  reader
-    .read()
-    .then(progress)
-    .catch(error);
-}
-
-function getChunk(response, id) {
-  const chunks = response._chunks;
-  let chunk = chunks.get(id);
-
-  if (!chunk) {
-    chunk = createPendingChunk(response);
-    chunks.set(id, chunk);
-  }
-
-  return chunk;
-}
-
-function getRoot(response) {
-  return getChunk(response, 0);
-}
-
-function createPendingChunk(response) {
-  // $FlowFixMe[invalid-constructor] Flow doesn't support functions as constructors
-  return new Chunk(PENDING, null, null, response);
-}
-
-function requireModule(metadata) {
-  let moduleExports;
-
-  if (metadata.async) {
-    // We assume that preloadModule has been called before, which
-    // should have added something to the module cache.
-    const promise = asyncModuleCache.get(metadata.id);
-
-    if (promise.status === 'fulfilled') {
-      moduleExports = promise.value;
-    } else {
-      throw promise.reason;
-    }
-  } else {
-    moduleExports = __webpack_require__(metadata.id);
-  }
-
-  if (metadata.name === '*') {
-    // This is a placeholder value that represents that the caller imported this
-    // as a CommonJS module as is.
-    return moduleExports;
-  }
-
-  if (metadata.name === '') {
-    // This is a placeholder value that represents that the caller accessed the
-    // default property of this if it was an ESM interop module.
-    return moduleExports.__esModule ? moduleExports.default : moduleExports;
-  }
-
-  return moduleExports[metadata.name];
-}
-
-function initializeModuleChunk(chunk) {
-  try {
-    const value = requireModule(chunk.value);
-    const initializedChunk = chunk;
-    initializedChunk.status = INITIALIZED;
-    initializedChunk.value = value;
-  } catch (error) {
-    const erroredChunk = chunk;
-    erroredChunk.status = ERRORED;
-    erroredChunk.reason = error;
-  }
-}
 
 function readChunk(chunk) {
   // If we have resolved content, we try to initialize it first which
@@ -387,6 +265,182 @@ function readChunk(chunk) {
     default:
       throw chunk.reason;
   }
+}
+
+function getRoot(response) {
+  return getChunk(response, 0);
+}
+
+function createPendingChunk(response) {
+  // $FlowFixMe[invalid-constructor] Flow doesn't support functions as constructors
+  return new Chunk(PENDING, null, null, response);
+}
+
+function createBlockedChunk(response) {
+  // $FlowFixMe[invalid-constructor] Flow doesn't support functions as constructors
+  return new Chunk(BLOCKED, null, null, response);
+}
+
+function createErrorChunk(response, error) {
+  // $FlowFixMe[invalid-constructor] Flow doesn't support functions as constructors
+  return new Chunk(ERRORED, null, error, response);
+}
+
+function wakeChunk(listeners, value) {
+  for (let i = 0; i < listeners.length; i++) {
+    const listener = listeners[i];
+    listener(value);
+  }
+}
+
+function wakeChunkIfInitialized(chunk, resolveListeners, rejectListeners) {
+  switch (chunk.status) {
+    case INITIALIZED:
+      wakeChunk(resolveListeners, chunk.value);
+      break;
+
+    case PENDING:
+    case BLOCKED:
+      chunk.value = resolveListeners;
+      chunk.reason = rejectListeners;
+      break;
+
+    case ERRORED:
+      if (rejectListeners) {
+        wakeChunk(rejectListeners, chunk.reason);
+      }
+
+      break;
+  }
+}
+
+function triggerErrorOnChunk(chunk, error) {
+  if (chunk.status !== PENDING && chunk.status !== BLOCKED) {
+    // We already resolved. We didn't expect to see this.
+    return;
+  }
+
+  const listeners = chunk.reason;
+  const erroredChunk = chunk;
+  erroredChunk.status = ERRORED;
+  erroredChunk.reason = error;
+
+  if (listeners !== null) {
+    wakeChunk(listeners, error);
+  }
+}
+
+function createResolvedModelChunk(response, value) {
+  // $FlowFixMe[invalid-constructor] Flow doesn't support functions as constructors
+  return new Chunk(RESOLVED_MODEL, value, null, response);
+}
+
+function createResolvedModuleChunk(response, value) {
+  // $FlowFixMe[invalid-constructor] Flow doesn't support functions as constructors
+  return new Chunk(RESOLVED_MODULE, value, null, response);
+}
+
+function resolveModelChunk(chunk, value) {
+  if (chunk.status !== PENDING) {
+    // We already resolved. We didn't expect to see this.
+    return;
+  }
+
+  const resolveListeners = chunk.value;
+  const rejectListeners = chunk.reason;
+  const resolvedChunk = chunk;
+  resolvedChunk.status = RESOLVED_MODEL;
+  resolvedChunk.value = value;
+
+  if (resolveListeners !== null) {
+    // This is unfortunate that we're reading this eagerly if
+    // we already have listeners attached since they might no
+    // longer be rendered or might not be the highest pri.
+    initializeModelChunk(resolvedChunk); // The status might have changed after initialization.
+
+    wakeChunkIfInitialized(chunk, resolveListeners, rejectListeners);
+  }
+}
+
+function resolveModuleChunk(chunk, value) {
+  if (chunk.status !== PENDING && chunk.status !== BLOCKED) {
+    // We already resolved. We didn't expect to see this.
+    return;
+  }
+
+  const resolveListeners = chunk.value;
+  const rejectListeners = chunk.reason;
+  const resolvedChunk = chunk;
+  resolvedChunk.status = RESOLVED_MODULE;
+  resolvedChunk.value = value;
+
+  if (resolveListeners !== null) {
+    initializeModuleChunk(resolvedChunk);
+    wakeChunkIfInitialized(chunk, resolveListeners, rejectListeners);
+  }
+}
+
+let initializingChunk = null;
+let initializingChunkBlockedModel = null;
+
+function initializeModelChunk(chunk) {
+  const prevChunk = initializingChunk;
+  const prevBlocked = initializingChunkBlockedModel;
+  initializingChunk = chunk;
+  initializingChunkBlockedModel = null;
+
+  try {
+    const value = parseModel(chunk._response, chunk.value);
+
+    if (
+      initializingChunkBlockedModel !== null &&
+      initializingChunkBlockedModel.deps > 0
+    ) {
+      initializingChunkBlockedModel.value = value; // We discovered new dependencies on modules that are not yet resolved.
+      // We have to go the BLOCKED state until they're resolved.
+
+      const blockedChunk = chunk;
+      blockedChunk.status = BLOCKED;
+      blockedChunk.value = null;
+      blockedChunk.reason = null;
+    } else {
+      const initializedChunk = chunk;
+      initializedChunk.status = INITIALIZED;
+      initializedChunk.value = value;
+    }
+  } catch (error) {
+    const erroredChunk = chunk;
+    erroredChunk.status = ERRORED;
+    erroredChunk.reason = error;
+  } finally {
+    initializingChunk = prevChunk;
+    initializingChunkBlockedModel = prevBlocked;
+  }
+}
+
+function initializeModuleChunk(chunk) {
+  try {
+    const value = requireModule(chunk.value);
+    const initializedChunk = chunk;
+    initializedChunk.status = INITIALIZED;
+    initializedChunk.value = value;
+  } catch (error) {
+    const erroredChunk = chunk;
+    erroredChunk.status = ERRORED;
+    erroredChunk.reason = error;
+  }
+} // Report that any missing chunks in the model is now going to throw this
+// error upon read. Also notify any pending promises.
+
+function reportGlobalError(response, error) {
+  response._chunks.forEach(function(chunk) {
+    // If this chunk was already resolved or errored, it won't
+    // trigger an error but if it wasn't then we need to
+    // because we won't be getting any new data to resolve it.
+    if (chunk.status === PENDING) {
+      triggerErrorOnChunk(chunk, error);
+    }
+  });
 }
 
 function createElement(type, key, props) {
@@ -438,35 +492,20 @@ function createLazyChunkWrapper(chunk) {
   };
 }
 
-function createServerReferenceProxy(response, metaData) {
-  const callServer = response._callServer;
+function getChunk(response, id) {
+  const chunks = response._chunks;
+  let chunk = chunks.get(id);
 
-  const proxy = function() {
-    // $FlowFixMe[method-unbinding]
-    const args = Array.prototype.slice.call(arguments);
-    const p = metaData.bound;
+  if (!chunk) {
+    chunk = createPendingChunk(response);
+    chunks.set(id, chunk);
+  }
 
-    if (!p) {
-      return callServer(metaData.id, args);
-    }
-
-    if (p.status === INITIALIZED) {
-      const bound = p.value;
-      return callServer(metaData.id, bound.concat(args));
-    } // Since this is a fake Promise whose .then doesn't chain, we have to wrap it.
-    // TODO: Remove the wrapper once that's fixed.
-
-    return Promise.resolve(p).then(function(bound) {
-      return callServer(metaData.id, bound.concat(args));
-    });
-  };
-
-  knownServerReferences.set(proxy, metaData);
-  return proxy;
+  return chunk;
 }
 
 function createModelResolver(chunk, parentObject, key) {
-  let blocked;
+  let blocked = null;
 
   if (initializingChunkBlockedModel) {
     blocked = initializingChunkBlockedModel;
@@ -503,6 +542,33 @@ function createModelReject(chunk) {
   return function(error) {
     return triggerErrorOnChunk(chunk, error);
   };
+}
+
+function createServerReferenceProxy(response, metaData) {
+  const callServer = response._callServer;
+
+  const proxy = function() {
+    // $FlowFixMe[method-unbinding]
+    const args = Array.prototype.slice.call(arguments);
+    const p = metaData.bound;
+
+    if (!p) {
+      return callServer(metaData.id, args);
+    }
+
+    if (p.status === INITIALIZED) {
+      const bound = p.value;
+      return callServer(metaData.id, bound.concat(args));
+    } // Since this is a fake Promise whose .then doesn't chain, we have to wrap it.
+    // TODO: Remove the wrapper once that's fixed.
+
+    return Promise.resolve(p).then(function(bound) {
+      return callServer(metaData.id, bound.concat(args));
+    });
+  };
+
+  knownServerReferences.set(proxy, metaData);
+  return proxy;
 }
 
 function parseModelString(response, parentObject, key, value) {
@@ -618,6 +684,7 @@ function parseModelString(response, parentObject, key, value) {
 
   return value;
 }
+
 function parseModelTuple(response, value) {
   const tuple = value;
 
@@ -630,8 +697,11 @@ function parseModelTuple(response, value) {
   return value;
 }
 
-function createStringDecoder() {
-  return new TextDecoder();
+function missingCall() {
+  throw new Error(
+    'Trying to call a function from "use server" but the callServer option ' +
+      'was not implemented in your router runtime.'
+  );
 }
 
 function createResponse$1(bundlerConfig, callServer) {
@@ -641,6 +711,149 @@ function createResponse$1(bundlerConfig, callServer) {
     _callServer: callServer !== undefined ? callServer : missingCall,
     _chunks: chunks,
   };
+}
+
+function resolveModel(response, id, model) {
+  const chunks = response._chunks;
+  const chunk = chunks.get(id);
+
+  if (!chunk) {
+    chunks.set(id, createResolvedModelChunk(response, model));
+  } else {
+    resolveModelChunk(chunk, model);
+  }
+}
+
+function resolveModule(response, id, model) {
+  const chunks = response._chunks;
+  const chunk = chunks.get(id);
+  const clientReferenceMetadata = parseModel(response, model);
+  const clientReference = resolveClientReference(
+    response._bundlerConfig,
+    clientReferenceMetadata
+  ); // TODO: Add an option to encode modules that are lazy loaded.
+  // For now we preload all modules as early as possible since it's likely
+  // that we'll need them.
+
+  const promise = preloadModule(clientReference);
+
+  if (promise) {
+    let blockedChunk = null;
+
+    if (!chunk) {
+      // Technically, we should just treat promise as the chunk in this
+      // case. Because it'll just behave as any other promise.
+      blockedChunk = createBlockedChunk(response);
+      chunks.set(id, blockedChunk);
+    } else {
+      // This can't actually happen because we don't have any forward
+      // references to modules.
+      blockedChunk = chunk;
+      blockedChunk.status = BLOCKED;
+    }
+
+    promise.then(
+      function() {
+        return resolveModuleChunk(blockedChunk, clientReference);
+      },
+      function(error) {
+        return triggerErrorOnChunk(blockedChunk, error);
+      }
+    );
+  } else {
+    if (!chunk) {
+      chunks.set(id, createResolvedModuleChunk(response, clientReference));
+    } else {
+      // This can't actually happen because we don't have any forward
+      // references to modules.
+      resolveModuleChunk(chunk, clientReference);
+    }
+  }
+}
+
+function resolveErrorDev(response, id, digest, message, stack) {
+  const error = new Error(
+    message ||
+      'An error occurred in the Server Components render but no message was provided'
+  );
+  error.stack = stack;
+  error.digest = digest;
+  const errorWithDigest = error;
+  const chunks = response._chunks;
+  const chunk = chunks.get(id);
+
+  if (!chunk) {
+    chunks.set(id, createErrorChunk(response, errorWithDigest));
+  } else {
+    triggerErrorOnChunk(chunk, errorWithDigest);
+  }
+}
+
+function close(response) {
+  // In case there are any remaining unresolved chunks, they won't
+  // be resolved now. So we need to issue an error to those.
+  // Ideally we should be able to early bail out if we kept a
+  // ref count of pending chunks.
+  reportGlobalError(response, new Error('Connection closed.'));
+}
+
+function processFullRow(response, row) {
+  if (row === '') {
+    return;
+  }
+
+  const colon = row.indexOf(':', 0);
+  const id = parseInt(row.substring(0, colon), 16);
+  const tag = row[colon + 1]; // When tags that are not text are added, check them here before
+  // parsing the row as text.
+  // switch (tag) {
+  // }
+
+  switch (tag) {
+    case 'I': {
+      resolveModule(response, id, row.substring(colon + 2));
+      return;
+    }
+
+    case 'E': {
+      const errorInfo = JSON.parse(row.substring(colon + 2));
+
+      {
+        resolveErrorDev(
+          response,
+          id,
+          errorInfo.digest,
+          errorInfo.message,
+          errorInfo.stack
+        );
+      }
+
+      return;
+    }
+
+    default: {
+      // We assume anything else is JSON.
+      resolveModel(response, id, row.substring(colon + 1));
+      return;
+    }
+  }
+}
+
+function processBinaryChunk(response, chunk) {
+  const stringDecoder = response._stringDecoder;
+  let linebreak = chunk.indexOf(10); // newline
+
+  while (linebreak > -1) {
+    const follow =
+      response._partialRow +
+      readFinalStringChunk(stringDecoder, chunk.subarray(0, linebreak));
+    processFullRow(response, follow);
+    response._partialRow = '';
+    chunk = chunk.subarray(linebreak + 1);
+    linebreak = chunk.indexOf(10); // newline
+  }
+
+  response._partialRow += readPartialStringChunk(stringDecoder, chunk);
 }
 
 function createFromJSONCallback(response) {
@@ -674,11 +887,48 @@ function createResponse(bundlerConfig, callServer) {
   return response;
 }
 
+function noServerCall() {
+  throw new Error(
+    'Server Functions cannot be called during initial render. ' +
+      'This would create a fetch waterfall. Try to use a Server Component ' +
+      'to pass data to Client Components instead.'
+  );
+}
+
 function createResponseFromOptions(options) {
   return createResponse(
     options && options.moduleMap ? options.moduleMap : null,
     noServerCall
   );
+}
+
+function startReadingFromStream(response, stream) {
+  const reader = stream.getReader();
+
+  function progress(_ref) {
+    const done = _ref.done,
+      value = _ref.value;
+
+    if (done) {
+      close(response);
+      return;
+    }
+
+    processBinaryChunk(response, value);
+    return reader
+      .read()
+      .then(progress)
+      .catch(error);
+  }
+
+  function error(e) {
+    reportGlobalError(response, e);
+  }
+
+  reader
+    .read()
+    .then(progress)
+    .catch(error);
 }
 
 function createFromReadableStream(stream, options) {
@@ -699,3 +949,6 @@ function createFromFetch(promiseForResponse, options) {
   );
   return getRoot(response);
 }
+
+exports.createFromFetch = createFromFetch;
+exports.createFromReadableStream = createFromReadableStream;
